@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cyber-Runner Pro</title>
+    <style>
+        body { background: #0a0a0a; color: #fff; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; touch-action: manipulation; }
+        
+        #game-container { position: relative; width: 100vw; max-width: 400px; height: 85vh; background: linear-gradient(180deg, #000 0%, #111 100%); border: 3px solid #0ff; box-shadow: 0 0 20px #0ff; overflow: hidden; }
+
+        /* Chão com efeito de velocidade */
+        #road { position: absolute; width: 100%; height: 100%; background-image: linear-gradient(#111 2px, transparent 2px), linear-gradient(90deg, #111 2px, transparent 2px); background-size: 40px 40px; animation: moveRoad 1s linear infinite; }
+        @keyframes moveRoad { from { background-position: 0 0; } to { background-position: 0 40px; } }
+
+        #player { position: absolute; width: 50px; height: 60px; background: #ff00ff; bottom: 40px; left: 175px; border-radius: 8px; box-shadow: 0 0 20px #f0f; transition: left 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 5; }
+
+        .obstacle { position: absolute; width: 70px; height: 30px; background: #0ff; border-radius: 5px; box-shadow: 0 0 15px #0ff; z-index: 4; }
+
+        /* UI Elements */
+        #hud { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-around; z-index: 10; font-weight: bold; font-size: 1.2rem; text-shadow: 0 0 5px #000; }
+        
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; padding: 20px; }
+        
+        button { background: #0ff; border: none; padding: 15px 40px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border-radius: 30px; box-shadow: 0 0 10px #0ff; margin-top: 20px; }
+
+        /* Controlos Mobile */
+        .touch-zone { position: absolute; top: 0; width: 50%; height: 100%; z-index: 50; }
+        #left-zone { left: 0; }
+        #right-zone { right: 0; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="road"></div>
+    <div id="hud">
+        <div>Score: <span id="score">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+    </div>
+    
+    <div id="player"></div>
+
+    <div id="left-zone" class="touch-zone"></div>
+    <div id="right-zone" class="touch-zone"></div>
+
+    <div id="overlay">
+        <h1 id="title" style="color:#0ff; margin-bottom:10px;">CYBER RUNNER</h1>
+        <div id="tutorial">
+            <p>Esquiva-te dos obstáculos azuis!</p>
+            <p><b>PC:</b> Setas ← e →</p>
+            <p><b>Mobile:</b> Toca nos lados do ecrã</p>
+        </div>
+        <button id="start-btn">COMEÇAR</button>
+    </div>
+</div>
+
+<script>
+    const container = document.getElementById('game-container');
+    const player = document.getElementById('player');
+    const scoreText = document.getElementById('score');
+    const levelText = document.getElementById('level');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('start-btn');
+
+    let score = 0;
+    let level = 1;
+    let gameActive = false;
+    let playerPos = 175;
+    let obstacleSpeed = 6;
+    let spawnRate = 1200;
+    let obstacles = [];
+
+    // Lógica de Movimento
+    function move(dir) {
+        if (!gameActive) return;
+        const laneWidth = 110; 
+        if (dir === 'left' && playerPos > 60) playerPos -= laneWidth;
+        if (dir === 'right' && playerPos < 280) playerPos += laneWidth;
+        player.style.left = playerPos + 'px';
+    }
+
+    // Eventos
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowLeft') move('left');
+        if (e.key === 'ArrowRight') move('right');
+    });
+
+    document.getElementById('left-zone').addEventListener('touchstart', (e) => { e.preventDefault(); move('left'); });
+    document.getElementById('right-zone').addEventListener('touchstart', (e) => { e.preventDefault(); move('right'); });
+
+    function createObstacle() {
+        if (!gameActive) return;
+        
+        const obs = document.createElement('div');
+        obs.classList.add('obstacle');
+        const lanes = [65, 175, 285]; // Posições exatas das faixas
+        obs.style.left = lanes[Math.floor(Math.random() * lanes.length)] - 10 + 'px';
+        obs.style.top = '-50px';
+        container.appendChild(obs);
+        obstacles.push(obs);
+
+        setTimeout(createObstacle, spawnRate);
+    }
+
+    function update() {
+        if (!gameActive) return;
+
+        obstacles.forEach((obs, index) => {
+            let top = parseFloat(obs.style.top);
+            top += obstacleSpeed;
+            obs.style.top = top + 'px';
+
+            // Colisão mais precisa
+            const p = player.getBoundingClientRect();
+            const o = obs.getBoundingClientRect();
+
+            if (p.left < o.right && p.right > o.left && p.top < o.bottom && p.bottom > o.top) {
+                endGame();
+            }
+
+            if (top > window.innerHeight) {
+                obs.remove();
+                obstacles.splice(index, 1);
+                score++;
+                scoreText.innerText = score;
+                
+                // Aumentar dificuldade
+                if (score % 10 === 0) {
+                    level++;
+                    levelText.innerText = level;
+                    obstacleSpeed += 0.8;
+                    spawnRate = Math.max(400, spawnRate - 100);
+                }
+            }
+        });
+
+        requestAnimationFrame(update);
+    }
+
+    function startGame() {
+        score = 0;
+        level = 1;
+        obstacleSpeed = 7;
+        spawnRate = 1200;
+        gameActive = true;
+        playerPos = 175;
+        player.style.left = '175px';
+        overlay.style.display = 'none';
+        scoreText.innerText = '0';
+        levelText.innerText = '1';
+        
+        obstacles.forEach(o => o.remove());
+        obstacles = [];
+        
+        createObstacle();
+        update();
+    }
+
+    function endGame() {
+        gameActive = false;
+        overlay.style.display = 'flex';
+        document.getElementById('title').innerText = "GAME OVER";
+        document.getElementById('tutorial').innerHTML = `<p>Pontuação: ${score}</p><p>Nível: ${level}</p>`;
+        startBtn.innerText = "TENTAR NOVAMENTE";
+    }
+
+    startBtn.onclick = startGame;
+</script>
+</body>
+</html>
